@@ -11,6 +11,7 @@ module Outbound
   GCM = "gcm"
 
   ERROR_USER_ID = "User ID must be a string or number."
+  ERROR_USER_ATTRS = "User attributes must be a non-empty hash"
   ERROR_PREVIOUS_ID = "Previous ID must be a string or number."
   ERROR_EVENT_NAME = "Event name must be a string."
   ERROR_CONNECTION = "Outbound connection error"
@@ -61,6 +62,15 @@ module Outbound
       return res
     end
     return @ob.track(user_id, event, properties, timestamp)
+  end
+
+  def Outbound.identify_and_track(user_attrs, event, properties={}, timestamp=Time.now.to_i)
+    if @ob == nil
+      res = Result.new Outbound::ERROR_INIT, false
+      @logger.error res.error
+      return res
+    end
+    return @ob.identify_and_track(user_attrs, event, properties, timestamp)
   end
 
   def Outbound.disable(platform, user_id, token)
@@ -125,6 +135,10 @@ module Outbound
 
     def user_id_error?
       return @error == Outbound::ERROR_USER_ID
+    end
+
+    def user_attrs_error?
+      return @error == Outbound::ERROR_USER_ATTRS
     end
 
     def event_name_error?
@@ -216,6 +230,35 @@ module Outbound
         end
       else
         @logger.error "Could not use event properties (#{properties}) given to track call."
+      end
+
+      data[:timestamp] = timestamp
+      puts timestamp
+
+      return post(@api_key, '/track', data)
+    end
+
+    def identify_and_track(user_attrs, event, properties={}, timestamp=Time.now.to_i)
+      unless user_attrs.is_a? Hash and !user_attrs.empty?
+        res = Result.new Outbound::ERROR_USER_ATTRS, false
+        @logger.error res.error
+        return res
+      end
+
+      unless event.is_a? String
+        res = Result.new Outbound::ERROR_EVENT_NAME, false
+        @logger.error res.error
+        return res
+      end
+
+      data = {:user => user_attrs, :event => event}
+
+      if properties.is_a? Hash
+        if properties.length > 0
+          data[:properties] = properties
+        end
+      else
+        @logger.error "Could not use event properties (#{properties}) given to identify_and_track call."
       end
 
       data[:timestamp] = timestamp
